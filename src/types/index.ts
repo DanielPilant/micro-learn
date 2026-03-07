@@ -1,4 +1,4 @@
-/** Core domain types – kept minimal for Step 1 */
+/** Core domain types */
 
 export interface Question {
   id: string;
@@ -15,6 +15,7 @@ export interface UserAnswer {
   question_id: string;
   answer_text: string;
   score?: number;
+  feedback?: string;
   answered_at: string;
 }
 
@@ -23,4 +24,10 @@ export interface Profile {
   display_name?: string;
   current_streak: number;
   longest_streak: number;
+}
+
+/** Returned by the evaluate-answer Edge Function */
+export interface EvaluationResult {
+  score: number;
+  feedback: string;
 }

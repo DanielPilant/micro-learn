@@ -29,7 +29,8 @@ create table if not exists public.user_answers (
   user_id       uuid not null references public.profiles(id) on delete cascade,
   question_id   uuid not null references public.questions(id) on delete cascade,
   answer_text   text not null,
-  score         int,           -- null until LLM evaluation is wired in Step 3
+  score         int,           -- 0-100, set by Edge Function after LLM evaluation
+  feedback      text,          -- written feedback from LLM, set alongside score
   answered_at   timestamptz not null default now()
 );
 

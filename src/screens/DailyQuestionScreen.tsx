@@ -15,26 +15,39 @@ import { StatusBar } from "expo-status-bar";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
 import { Colors, Spacing } from "../constants/theme";
-import type { Question } from "../types";
+import EvaluationCard from "../components/EvaluationCard";
+import type { Question, EvaluationResult } from "../types";
 import type { DailyQuestionScreenProps } from "../navigation/types";
 
 export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
   const { user, signOut } = useAuth();
 
+  // ── Question state ─────────────────────────────────────────
   const [question, setQuestion] = useState<Question | null>(null);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // ── Submission state machine ───────────────────────────────
+  // Phase 1 – submitting: INSERT into user_answers
+  // Phase 2 – evaluating: Edge Function calling Gemini
+  // Phase 3 – submitted:  result ready (or evaluation failed gracefully)
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [evaluationResult, setEvaluationResult] =
+    useState<EvaluationResult | null>(null);
+  const [evalError, setEvalError] = useState<string | null>(null);
 
-  // ── Fetch a random question from Supabase ──────────────────
+  // ── Fetch a random question ────────────────────────────────
   const fetchQuestion = useCallback(async () => {
     setFetchLoading(true);
     setFetchError(null);
     setAnswer("");
     setSubmitted(false);
+    setEvaluating(false);
+    setEvaluationResult(null);
+    setEvalError(null);
 
     const { data, error } = await supabase.from("questions").select("*");
 
@@ -44,7 +57,6 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
       return;
     }
 
-    // Pick a random question from the returned rows.
     const random = data[Math.floor(Math.random() * data.length)] as Question;
     setQuestion(random);
     setFetchLoading(false);
@@ -54,7 +66,7 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
     fetchQuestion();
   }, [fetchQuestion]);
 
-  // ── Persist answer to Supabase ────────────────────────────
+  // ── Submit handler (3-phase) ───────────────────────────────
   const handleSubmit = async () => {
     if (!answer.trim()) {
       Alert.alert("Empty answer", "Write something before submitting.");
@@ -62,23 +74,50 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
     }
     if (!question || !user) return;
 
+    // ── Phase 1: persist the raw answer ─────────────────────
     setSubmitting(true);
-    const { error } = await supabase.from("user_answers").insert({
-      user_id: user.id,
-      question_id: question.id,
-      answer_text: answer.trim(),
-    });
+    const { data: savedAnswer, error: insertError } = await supabase
+      .from("user_answers")
+      .insert({
+        user_id: user.id,
+        question_id: question.id,
+        answer_text: answer.trim(),
+      })
+      .select("id")
+      .single();
     setSubmitting(false);
 
-    if (error) {
-      Alert.alert("Save failed", error.message);
+    if (insertError || !savedAnswer) {
+      Alert.alert(
+        "Save failed",
+        insertError?.message ?? "Could not save your answer."
+      );
       return;
     }
 
+    // ── Phase 2: invoke the evaluation Edge Function ─────────
+    setEvaluating(true);
+    const { data: evalData, error: fnError } =
+      await supabase.functions.invoke<EvaluationResult>("evaluate-answer", {
+        body: { answer_id: savedAnswer.id },
+      });
+    setEvaluating(false);
+
+    if (fnError || !evalData) {
+      // Evaluation failed — show a graceful error but still let the user
+      // proceed. Their answer is already saved; score will remain null.
+      setEvalError(
+        "Evaluation unavailable right now. Your answer has been saved."
+      );
+    } else {
+      setEvaluationResult(evalData);
+    }
+
+    // ── Phase 3: mark as submitted regardless of eval outcome ─
     setSubmitted(true);
   };
 
-  // ── Loading state ─────────────────────────────────────────
+  // ── Full-screen loading state ──────────────────────────────
   if (fetchLoading) {
     return (
       <View style={styles.centered}>
@@ -87,7 +126,7 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
     );
   }
 
-  // ── Error state ───────────────────────────────────────────
+  // ── Full-screen error state ────────────────────────────────
   if (fetchError || !question) {
     return (
       <View style={styles.centered}>
@@ -99,7 +138,9 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
     );
   }
 
-  // ── Main render ───────────────────────────────────────────
+  // ── Lock input whenever a network call is in flight ────────
+  const inputLocked = submitting || evaluating || submitted;
+
   return (
     <KeyboardAvoidingView
       style={styles.root}
@@ -118,25 +159,22 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
           </TouchableOpacity>
         </View>
 
-        {/* ── Header ── */}
+        {/* ── Category + difficulty ── */}
         <Text style={styles.categoryBadge}>
           {question.category.replace(/_/g, " ").toUpperCase()}
         </Text>
         <Text style={styles.difficulty}>{question.difficulty}</Text>
 
-        {/* ── Question ── */}
+        {/* ── Question text ── */}
         <Text style={styles.questionText}>{question.question}</Text>
 
         {question.hint && (
           <Text style={styles.hint}>Hint: {question.hint}</Text>
         )}
 
-        {/* ── Answer Input ── */}
+        {/* ── Answer input ── */}
         <TextInput
-          style={[
-            styles.input,
-            (submitted || submitting) && styles.inputDisabled,
-          ]}
+          style={[styles.input, inputLocked && styles.inputDisabled]}
           placeholder="Type your answer here..."
           placeholderTextColor={Colors.textSecondary}
           multiline
@@ -144,11 +182,18 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
           textAlignVertical="top"
           value={answer}
           onChangeText={setAnswer}
-          editable={!submitted && !submitting}
+          editable={!inputLocked}
         />
 
-        {/* ── Action Button ── */}
-        {!submitted ? (
+        {/* ── Action area: Submit → Evaluating → Result ── */}
+        {evaluating ? (
+          // Phase 2: Gemini is processing
+          <View style={styles.evaluatingBox}>
+            <ActivityIndicator color={Colors.primary} />
+            <Text style={styles.evaluatingText}>Gemini is evaluating…</Text>
+          </View>
+        ) : !submitted ? (
+          // Phase 1 or idle: show submit button
           <TouchableOpacity
             style={[styles.button, submitting && styles.buttonDisabled]}
             onPress={handleSubmit}
@@ -161,15 +206,22 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
             )}
           </TouchableOpacity>
         ) : (
+          // Phase 3: evaluation complete (or gracefully failed)
           <View>
-            <Text style={styles.successText}>
-              Answer saved! AI evaluation coming in Step 3.
-            </Text>
+            {evaluationResult ? (
+              <EvaluationCard {...evaluationResult} />
+            ) : (
+              <View style={styles.evalErrorBox}>
+                <Text style={styles.evalErrorText}>{evalError}</Text>
+              </View>
+            )}
             <TouchableOpacity
               style={[styles.button, styles.secondaryButton]}
               onPress={fetchQuestion}
             >
-              <Text style={styles.buttonText}>Next Question</Text>
+              <Text style={[styles.buttonText, styles.secondaryButtonText]}>
+                Next Question
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -178,7 +230,7 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -266,8 +318,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   secondaryButton: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.primary,
+    backgroundColor: "transparent",
+    borderColor: Colors.border,
     borderWidth: 1,
     marginTop: Spacing.sm,
   },
@@ -276,11 +328,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  successText: {
-    color: Colors.success,
+  secondaryButtonText: {
+    color: Colors.textSecondary,
+  },
+  evaluatingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.lg,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  evaluatingText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+  },
+  evalErrorBox: {
+    padding: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.error + "44",
+    marginBottom: Spacing.lg,
+  },
+  evalErrorText: {
+    color: Colors.textSecondary,
     fontSize: 14,
     textAlign: "center",
-    marginBottom: Spacing.md,
+    lineHeight: 20,
   },
   errorText: {
     color: Colors.error,
