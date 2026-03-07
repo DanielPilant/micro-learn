@@ -121,7 +121,7 @@ Return ONLY a JSON object with this exact shape (no markdown, no code fences):
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             responseMimeType: "application/json", // enforces pure JSON output
-            temperature: 0.1,                     // low variance = consistent scoring
+            temperature: 0.1, // low variance = consistent scoring
           },
         }),
       },

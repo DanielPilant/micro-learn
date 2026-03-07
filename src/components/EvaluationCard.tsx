@@ -10,8 +10,8 @@ const AMBER = "#F59E0B";
 function getScoreColor(score: number): string {
   if (score >= 90) return Colors.success; // green
   if (score >= 70) return Colors.primary; // blue
-  if (score >= 40) return AMBER;          // amber
-  return Colors.error;                    // red
+  if (score >= 40) return AMBER; // amber
+  return Colors.error; // red
 }
 
 function getScoreLabel(score: number): string {
@@ -35,9 +35,7 @@ export default function EvaluationCard({ score, feedback }: EvaluationResult) {
           <Text style={[styles.scoreNumber, { color }]}>{score}</Text>
           <Text style={styles.scoreOutOf}>/100</Text>
         </View>
-        <View
-          style={[styles.labelBadge, { backgroundColor: color + "22" }]}
-        >
+        <View style={[styles.labelBadge, { backgroundColor: color + "22" }]}>
           <Text style={[styles.labelText, { color }]}>{label}</Text>
         </View>
       </View>
