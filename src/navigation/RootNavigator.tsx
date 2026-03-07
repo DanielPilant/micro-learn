@@ -2,15 +2,18 @@ import React from "react";
 import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import SignInScreen from "../screens/SignInScreen";
 import SignUpScreen from "../screens/SignUpScreen";
 import DailyQuestionScreen from "../screens/DailyQuestionScreen";
+import ReadinessScreen from "../screens/ReadinessScreen";
 import { Colors } from "../constants/theme";
-import type { AuthStackParamList, AppStackParamList } from "./types";
+import type { AuthStackParamList, AppTabParamList } from "./types";
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
-const AppStack = createNativeStackNavigator<AppStackParamList>();
+const AppTab = createBottomTabNavigator<AppTabParamList>();
 
 function AuthNavigator() {
   return (
@@ -23,9 +26,36 @@ function AuthNavigator() {
 
 function AppNavigator() {
   return (
-    <AppStack.Navigator screenOptions={{ headerShown: false }}>
-      <AppStack.Screen name="DailyQuestion" component={DailyQuestionScreen} />
-    </AppStack.Navigator>
+    <AppTab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused, color, size }) => {
+          const icon =
+            route.name === "Daily"
+              ? focused
+                ? "book"
+                : "book-outline"
+              : focused
+                ? "bar-chart"
+                : "bar-chart-outline";
+          return <Ionicons name={icon as any} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.textSecondary,
+        tabBarStyle: {
+          backgroundColor: Colors.surface,
+          borderTopColor: Colors.border,
+          borderTopWidth: 1,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: "600",
+        },
+      })}
+    >
+      <AppTab.Screen name="Daily" component={DailyQuestionScreen} />
+      <AppTab.Screen name="Progress" component={ReadinessScreen} />
+    </AppTab.Navigator>
   );
 }
 

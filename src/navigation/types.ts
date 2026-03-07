@@ -1,13 +1,14 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 
 export type AuthStackParamList = {
   SignIn: undefined;
   SignUp: undefined;
 };
 
-export type AppStackParamList = {
-  DailyQuestion: undefined;
-  // Additional screens (Profile, Progress, etc.) added in later steps.
+export type AppTabParamList = {
+  Daily: undefined;
+  Progress: undefined;
 };
 
 export type SignInScreenProps = NativeStackScreenProps<
@@ -18,7 +19,12 @@ export type SignUpScreenProps = NativeStackScreenProps<
   AuthStackParamList,
   "SignUp"
 >;
-export type DailyQuestionScreenProps = NativeStackScreenProps<
-  AppStackParamList,
-  "DailyQuestion"
+
+export type DailyQuestionScreenProps = BottomTabScreenProps<
+  AppTabParamList,
+  "Daily"
+>;
+export type ReadinessScreenProps = BottomTabScreenProps<
+  AppTabParamList,
+  "Progress"
 >;

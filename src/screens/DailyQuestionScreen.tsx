@@ -12,6 +12,7 @@ import {
   Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
 import { Colors, Spacing } from "../constants/theme";
@@ -26,6 +27,23 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
   const [question, setQuestion] = useState<Question | null>(null);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // ── Streak ─────────────────────────────────────────────────
+  const [streak, setStreak] = useState<number | null>(null);
+
+  const fetchStreak = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("current_streak")
+      .eq("id", user.id)
+      .single();
+    if (data) setStreak(data.current_streak);
+  }, [user]);
+
+  useEffect(() => {
+    fetchStreak();
+  }, [fetchStreak]);
 
   // ── Submission state machine ───────────────────────────────
   // Phase 1 – submitting: INSERT into user_answers
@@ -90,10 +108,14 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
     if (insertError || !savedAnswer) {
       Alert.alert(
         "Save failed",
-        insertError?.message ?? "Could not save your answer."
+        insertError?.message ?? "Could not save your answer.",
       );
       return;
     }
+
+    // Trigger has already fired inside the INSERT transaction, so the streak
+    // is already updated in profiles by the time we reach this point.
+    fetchStreak();
 
     // ── Phase 2: invoke the evaluation Edge Function ─────────
     setEvaluating(true);
@@ -107,7 +129,7 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
       // Evaluation failed — show a graceful error but still let the user
       // proceed. Their answer is already saved; score will remain null.
       setEvalError(
-        "Evaluation unavailable right now. Your answer has been saved."
+        "Evaluation unavailable right now. Your answer has been saved.",
       );
     } else {
       setEvaluationResult(evalData);
@@ -154,6 +176,12 @@ export default function DailyQuestionScreen(_: DailyQuestionScreenProps) {
         {/* ── Top bar ── */}
         <View style={styles.topBar}>
           <Text style={styles.appName}>micro-learn</Text>
+          {streak !== null && (
+            <View style={styles.streakBadge}>
+              <Ionicons name="flame" size={14} color="#F59E0B" />
+              <Text style={styles.streakText}>{streak}</Text>
+            </View>
+          )}
           <TouchableOpacity onPress={signOut}>
             <Text style={styles.signOutText}>Sign out</Text>
           </TouchableOpacity>
@@ -365,5 +393,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     marginBottom: Spacing.lg,
+  },
+  streakBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    gap: 4,
+  },
+  streakText: {
+    color: Colors.textPrimary,
+    fontSize: 13,
+    fontWeight: "700",
   },
 });
