@@ -7,7 +7,8 @@ export type AuthStackParamList = {
 };
 
 export type AppTabParamList = {
-  Daily: undefined;
+  Learn: undefined;
+  Practice: undefined;
   Progress: undefined;
 };
 
@@ -20,9 +21,10 @@ export type SignUpScreenProps = NativeStackScreenProps<
   "SignUp"
 >;
 
+export type LearnScreenProps = BottomTabScreenProps<AppTabParamList, "Learn">;
 export type DailyQuestionScreenProps = BottomTabScreenProps<
   AppTabParamList,
-  "Daily"
+  "Practice"
 >;
 export type ReadinessScreenProps = BottomTabScreenProps<
   AppTabParamList,
