@@ -12,14 +12,6 @@ export interface DailyConceptState {
   submitQuizScore: (conceptId: string, score: number) => Promise<void>;
 }
 
-function todayDateString(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 export function useDailyConcept(): DailyConceptState {
   const { user } = useAuth();
   const [concept, setConcept] = useState<DailyConcept | null>(null);
@@ -32,14 +24,13 @@ export function useDailyConcept(): DailyConceptState {
     setLoading(true);
     setError(null);
 
-    const today = todayDateString();
-
-    // ── 1. Fetch today's concept ──────────────────────────────
+    // ── 1. Fetch the most recent concept ──────────────────────
     const { data: conceptData, error: conceptErr } = await supabase
       .from("daily_concepts")
-      .select("id, date, title, content, quiz_data")
-      .eq("date", today)
-      .maybeSingle();
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(1)
+      .single();
 
     if (conceptErr) {
       setError(conceptErr.message);
