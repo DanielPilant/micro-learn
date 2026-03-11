@@ -8,7 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import SignInScreen from "../screens/SignInScreen";
 import SignUpScreen from "../screens/SignUpScreen";
 import LearnScreen from "../screens/LearnScreen";
-import PracticeNavigator from "./PracticeNavigator";
+import DailyQuestionScreen from "../screens/DailyQuestionScreen";
 import ReadinessScreen from "../screens/ReadinessScreen";
 import { Colors } from "../constants/theme";
 import type { AuthStackParamList, AppTabParamList } from "./types";
