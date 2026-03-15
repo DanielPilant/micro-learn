@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Colors, Spacing } from "../constants/theme";
+import { useLanguage } from "../context/LanguageContext";
 import type { EvaluationResult } from "../types";
 
 // ── Score interpretation helpers ─────────────────────────────
@@ -14,17 +15,19 @@ function getScoreColor(score: number): string {
   return Colors.error; // red
 }
 
-function getScoreLabel(score: number): string {
-  if (score >= 90) return "Excellent";
-  if (score >= 70) return "Good";
-  if (score >= 40) return "Developing";
-  return "Needs Work";
-}
-
 // ── Component ────────────────────────────────────────────────
 
 export default function EvaluationCard({ score, feedback }: EvaluationResult) {
+  const { t } = useLanguage();
   const color = getScoreColor(score);
+
+  function getScoreLabel(s: number): string {
+    if (s >= 90) return t("eval.excellent");
+    if (s >= 70) return t("eval.good");
+    if (s >= 40) return t("eval.developing");
+    return t("eval.needsWork");
+  }
+
   const label = getScoreLabel(score);
 
   return (
@@ -53,7 +56,7 @@ export default function EvaluationCard({ score, feedback }: EvaluationResult) {
       <View style={styles.divider} />
 
       {/* ── Written feedback ── */}
-      <Text style={styles.feedbackLabel}>Feedback</Text>
+      <Text style={styles.feedbackLabel}>{t("eval.feedback")}</Text>
       <Text style={styles.feedbackText}>{feedback}</Text>
     </View>
   );
@@ -128,5 +131,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 15,
     lineHeight: 23,
+    textAlign: "auto",
   },
 });

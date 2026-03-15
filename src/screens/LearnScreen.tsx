@@ -11,6 +11,7 @@ import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { useDailyConcept } from "../hooks/useDailyConcept";
 import { Colors, Spacing } from "../constants/theme";
 import type { LearnScreenProps } from "../navigation/types";
@@ -23,9 +24,10 @@ const AMBER = "#F59E0B";
 interface QuizProps {
   questions: QuizQuestion[];
   onComplete: (score: number) => void;
+  t: (key: any, vars?: Record<string, string | number>) => string;
 }
 
-function Quiz({ questions, onComplete }: QuizProps) {
+function Quiz({ questions, onComplete, t }: QuizProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
@@ -77,7 +79,10 @@ function Quiz({ questions, onComplete }: QuizProps) {
       </View>
 
       <Text style={styles.quizLabel}>
-        QUESTION {currentIndex + 1} OF {questions.length}
+        {t("learn.questionOf", {
+          current: String(currentIndex + 1),
+          total: String(questions.length),
+        })}
       </Text>
       <Text style={styles.quizQuestionText}>{q.question}</Text>
 
@@ -127,7 +132,7 @@ function Quiz({ questions, onComplete }: QuizProps) {
                 { color: isCorrect ? Colors.success : Colors.error },
               ]}
             >
-              {isCorrect ? "Correct!" : "Incorrect"}
+              {isCorrect ? t("learn.correct") : t("learn.incorrect")}
             </Text>
           </View>
           <Text style={styles.explanationText}>{q.explanation}</Text>
@@ -138,7 +143,7 @@ function Quiz({ questions, onComplete }: QuizProps) {
       {isAnswered && (
         <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
           <Text style={styles.nextButtonText}>
-            {isLast ? "See Results" : "Next Question"}
+            {isLast ? t("learn.seeResults") : t("learn.nextQuestion")}
           </Text>
           <Ionicons
             name={isLast ? "trophy-outline" : "arrow-forward"}
@@ -153,7 +158,15 @@ function Quiz({ questions, onComplete }: QuizProps) {
 
 // ── Completion card ──────────────────────────────────────────
 
-function CompletionCard({ score, total }: { score: number; total: number }) {
+function CompletionCard({
+  score,
+  total,
+  t,
+}: {
+  score: number;
+  total: number;
+  t: (key: any) => string;
+}) {
   const color =
     score === total
       ? Colors.success
@@ -164,16 +177,16 @@ function CompletionCard({ score, total }: { score: number; total: number }) {
   return (
     <View style={styles.completionCard}>
       <Ionicons name="checkmark-done-circle" size={48} color={color} />
-      <Text style={styles.completionTitle}>Quiz Complete!</Text>
+      <Text style={styles.completionTitle}>{t("learn.quizComplete")}</Text>
       <Text style={[styles.completionScore, { color }]}>
         {score}/{total}
       </Text>
       <Text style={styles.completionSubtitle}>
         {score === total
-          ? "Perfect score! You nailed it."
+          ? t("learn.perfectScore")
           : score >= Math.ceil(total / 2)
-            ? "Solid work. Review the explanations to strengthen weak spots."
-            : "Keep learning! Re-read the article and try again tomorrow."}
+            ? t("learn.solidWork")
+            : t("learn.keepLearning")}
       </Text>
     </View>
   );
@@ -183,6 +196,7 @@ function CompletionCard({ score, total }: { score: number; total: number }) {
 
 export default function LearnScreen(_: LearnScreenProps) {
   const { signOut } = useAuth();
+  const { t, lang } = useLanguage();
   const { concept, progress, loading, error, refresh, submitQuizScore } =
     useDailyConcept();
   const [quizCompleted, setQuizCompleted] = useState(false);
@@ -220,7 +234,7 @@ export default function LearnScreen(_: LearnScreenProps) {
       <View style={styles.centered}>
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>{t("learn.retry")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -231,9 +245,9 @@ export default function LearnScreen(_: LearnScreenProps) {
     return (
       <View style={styles.centered}>
         <Ionicons name="time-outline" size={48} color={Colors.textSecondary} />
-        <Text style={styles.emptyTitle}>No Daily Bite yet</Text>
+        <Text style={styles.emptyTitle}>{t("learn.noConcept")}</Text>
         <Text style={styles.emptyBody}>
-          Today's concept hasn't been generated yet. Check back soon!
+          {t("learn.noConceptBody")}
         </Text>
       </View>
     );
@@ -251,19 +265,22 @@ export default function LearnScreen(_: LearnScreenProps) {
       <ScrollView contentContainerStyle={styles.container}>
         {/* ── Top bar ── */}
         <View style={styles.topBar}>
-          <Text style={styles.appName}>micro-learn</Text>
+          <Text style={styles.appName}>{t("learn.appName")}</Text>
           <TouchableOpacity onPress={signOut}>
-            <Text style={styles.signOutText}>Sign out</Text>
+            <Text style={styles.signOutText}>{t("learn.signOut")}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Date badge ── */}
         <Text style={styles.dateBadge}>
-          {new Date(concept.date + "T00:00:00").toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-          })}
+          {new Date(concept.date + "T00:00:00").toLocaleDateString(
+            lang === "he" ? "he-IL" : "en-US",
+            {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            },
+          )}
         </Text>
 
         {/* ── Article ── */}
@@ -274,12 +291,12 @@ export default function LearnScreen(_: LearnScreenProps) {
         <View style={styles.divider} />
 
         {/* ── Quiz section ── */}
-        <Text style={styles.sectionTitle}>KNOWLEDGE CHECK</Text>
+        <Text style={styles.sectionTitle}>{t("learn.knowledgeCheck")}</Text>
 
         {showCompletionCard ? (
-          <CompletionCard score={displayScore} total={quizQuestions.length} />
+          <CompletionCard score={displayScore} total={quizQuestions.length} t={t} />
         ) : (
-          <Quiz questions={quizQuestions} onComplete={handleQuizComplete} />
+          <Quiz questions={quizQuestions} onComplete={handleQuizComplete} t={t} />
         )}
       </ScrollView>
     </View>
@@ -336,12 +353,14 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 32,
     marginBottom: Spacing.md,
+    textAlign: "auto",
   },
   content: {
     color: Colors.textPrimary,
     fontSize: 15,
     lineHeight: 24,
     marginBottom: Spacing.lg,
+    textAlign: "auto",
   },
 
   // ── Section divider ──
@@ -392,6 +411,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 24,
     marginBottom: Spacing.md,
+    textAlign: "auto",
   },
 
   // ── Option buttons ──
@@ -460,6 +480,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 14,
     lineHeight: 21,
+    textAlign: "auto",
   },
 
   // ── Next button ──

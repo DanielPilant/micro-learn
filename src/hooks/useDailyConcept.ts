@@ -24,30 +24,45 @@ export function useDailyConcept(): DailyConceptState {
     setLoading(true);
     setError(null);
 
-    // ── 1. Fetch the most recent concept ──────────────────────
+    // ── 1. Fetch the user's preferred content language ─────────
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("content_language")
+      .eq("id", user.id)
+      .single();
+
+    const userLang = profileData?.content_language ?? "en";
+
+    // ── 2. Fetch the most recent concept in the user's language ─
+    // Use .maybeSingle() instead of .single() — .single() throws
+    // PGRST116 ("cannot coerce to JSON object") when 0 or 2+ rows match.
     const { data: conceptData, error: conceptErr } = await supabase
       .from("daily_concepts")
       .select("*")
+      .eq("language", userLang)
       .order("date", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (conceptErr) {
+      console.error("Fetch concept error:", conceptErr);
       setError(conceptErr.message);
       setLoading(false);
       return;
     }
 
     if (!conceptData) {
+      console.log("No concept found for language:", userLang);
       setConcept(null);
       setProgress(null);
       setLoading(false);
       return;
     }
 
+    console.log("Fetched concept:", conceptData.id, conceptData.title);
     setConcept(conceptData as DailyConcept);
 
-    // ── 2. Check if user already completed this concept's quiz ─
+    // ── 3. Check if user already completed this concept's quiz ─
     const { data: progressData, error: progressErr } = await supabase
       .from("user_concept_progress")
       .select("id, user_id, concept_id, score, completed_at")

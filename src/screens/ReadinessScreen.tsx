@@ -11,6 +11,7 @@ import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { useReadiness } from "../hooks/useReadiness";
 import { Colors, Spacing } from "../constants/theme";
 import type { ReadinessScreenProps } from "../navigation/types";
@@ -32,7 +33,13 @@ function formatCategory(cat: string): string {
     .join(" ");
 }
 
-function CategoryCard({ item }: { item: CategoryReadiness }) {
+function CategoryCard({
+  item,
+  t,
+}: {
+  item: CategoryReadiness;
+  t: (key: any, vars?: Record<string, string | number>) => string;
+}) {
   const color = scoreColor(item.avgScore);
   return (
     <View style={styles.card}>
@@ -52,7 +59,10 @@ function CategoryCard({ item }: { item: CategoryReadiness }) {
       </View>
 
       <Text style={styles.cardMeta}>
-        Based on {item.answerCount} answer{item.answerCount !== 1 ? "s" : ""}
+        {t("progress.basedOn", {
+          count: item.answerCount,
+          s: item.answerCount !== 1 ? "s" : "",
+        })}
       </Text>
     </View>
   );
@@ -60,6 +70,7 @@ function CategoryCard({ item }: { item: CategoryReadiness }) {
 
 export default function ReadinessScreen(_: ReadinessScreenProps) {
   const { signOut } = useAuth();
+  const { t } = useLanguage();
   const { profile, categories, loading, error, refresh } = useReadiness();
 
   // Re-fetch every time the user switches to this tab so data stays current.
@@ -77,11 +88,11 @@ export default function ReadinessScreen(_: ReadinessScreenProps) {
         <View style={styles.topBar}>
           <Text style={styles.appName}>micro-learn</Text>
           <TouchableOpacity onPress={signOut}>
-            <Text style={styles.signOutText}>Sign out</Text>
+            <Text style={styles.signOutText}>{t("learn.signOut")}</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.screenTitle}>Progress</Text>
+        <Text style={styles.screenTitle}>{t("progress.title")}</Text>
 
         {loading ? (
           <View style={styles.centered}>
@@ -91,7 +102,7 @@ export default function ReadinessScreen(_: ReadinessScreenProps) {
           <View style={styles.centered}>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-              <Text style={styles.retryText}>Retry</Text>
+              <Text style={styles.retryText}>{t("learn.retry")}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -104,7 +115,9 @@ export default function ReadinessScreen(_: ReadinessScreenProps) {
                   <Text style={styles.streakCount}>
                     {profile?.current_streak ?? 0}
                   </Text>
-                  <Text style={styles.streakLabel}>day streak</Text>
+                  <Text style={styles.streakLabel}>
+                    {t("progress.dayStreak")}
+                  </Text>
                 </View>
               </View>
               <View style={styles.streakDivider} />
@@ -112,12 +125,14 @@ export default function ReadinessScreen(_: ReadinessScreenProps) {
                 <Text style={styles.longestCount}>
                   {profile?.longest_streak ?? 0}
                 </Text>
-                <Text style={styles.longestLabel}>longest</Text>
+                <Text style={styles.longestLabel}>{t("progress.longest")}</Text>
               </View>
             </View>
 
             {/* ── Category readiness ── */}
-            <Text style={styles.sectionTitle}>Readiness by Category</Text>
+            <Text style={styles.sectionTitle}>
+              {t("progress.readinessByCategory")}
+            </Text>
 
             {categories.length === 0 ? (
               <View style={styles.emptyState}>
@@ -126,15 +141,12 @@ export default function ReadinessScreen(_: ReadinessScreenProps) {
                   size={40}
                   color={Colors.textSecondary}
                 />
-                <Text style={styles.emptyTitle}>No data yet</Text>
-                <Text style={styles.emptyBody}>
-                  Submit and evaluate answers on the Daily tab to see your
-                  readiness scores here.
-                </Text>
+                <Text style={styles.emptyTitle}>{t("progress.noData")}</Text>
+                <Text style={styles.emptyBody}>{t("progress.noDataBody")}</Text>
               </View>
             ) : (
               categories.map((item) => (
-                <CategoryCard key={item.category} item={item} />
+                <CategoryCard key={item.category} item={item} t={t} />
               ))
             )}
           </>

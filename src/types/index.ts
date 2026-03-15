@@ -7,6 +7,7 @@ export interface Question {
   question: string;
   hint?: string;
   sample_answer?: string;
+  language: "en" | "he";
 }
 
 export interface UserAnswer {
@@ -24,6 +25,7 @@ export interface Profile {
   display_name?: string;
   current_streak: number;
   longest_streak: number;
+  content_language: "en" | "he";
 }
 
 /** Returned by the evaluate-answer Edge Function */
@@ -47,6 +49,7 @@ export interface DailyConcept {
   title: string;
   content: string;
   quiz_data: QuizQuestion[];
+  language: "en" | "he";
 }
 
 export interface UserConceptProgress {

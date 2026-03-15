@@ -6,14 +6,16 @@
 //
 // Flow:
 //   1. Validate CRON_SECRET
-//   2. Check if today's concept already exists (idempotent)
-//   3. Pick a random subtopic from the FAANG syllabus
-//   4. Call Gemini 2.5 Flash to generate article + quiz (JSON mode)
-//   5. INSERT into daily_concepts for today's date
+//   2. Pick ONE random subtopic for the day (same topic across all languages)
+//   3. For each supported language ['en', 'he']:
+//        a. Skip if a concept for (today, language) already exists (idempotent)
+//        b. Call Gemini 2.5 Flash to generate article + quiz in that language
+//        c. INSERT into daily_concepts with the language tag
+//   4. Return a summary of what was inserted
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-// ── CORS (needed even for server-to-server when routing through Supabase) ──
+// ── CORS ─────────────────────────────────────────────────────
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -27,7 +29,16 @@ function json(body: unknown, status = 200) {
   });
 }
 
-// ── FAANG Interview Syllabus ─────────────────────────────────
+// ── Language config ───────────────────────────────────────────
+const SUPPORTED_LANGUAGES = ["en", "he"] as const;
+type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+
+const LANGUAGE_NAMES: Record<SupportedLanguage, string> = {
+  en: "English",
+  he: "Hebrew",
+};
+
+// ── FAANG Interview Syllabus ──────────────────────────────────
 interface SyllabusTopic {
   category: string;
   subtopic: string;
@@ -146,9 +157,32 @@ const SYLLABUS: SyllabusTopic[] = [
   },
 ];
 
+// ── Gemini helper ─────────────────────────────────────────────
+async function callGemini(apiKey: string, prompt: string): Promise<string> {
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.4,
+        },
+      }),
+    },
+  );
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Gemini API error: ${errText}`);
+  }
+  const data = await resp.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+}
+
 // ── Main handler ─────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
-  // Preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS });
   }
@@ -159,46 +193,53 @@ Deno.serve(async (req: Request) => {
     if (!cronSecret) {
       return json({ error: "CRON_SECRET is not configured" }, 500);
     }
-
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader !== `Bearer ${cronSecret}`) {
+    if (req.headers.get("Authorization") !== `Bearer ${cronSecret}`) {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    // ── 2. Build admin Supabase client ───────────────────────
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!geminiApiKey) {
+      return json({ error: "GEMINI_API_KEY secret is not configured" }, 500);
+    }
+
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       { auth: { persistSession: false } },
     );
 
-    // ── 3. Idempotency: skip if today's concept already exists ─
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD in UTC
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
 
-    const { data: existing } = await admin
-      .from("daily_concepts")
-      .select("id")
-      .eq("date", today)
-      .maybeSingle();
-
-    if (existing) {
-      return json({
-        message: "Concept for today already exists",
-        id: existing.id,
-        date: today,
-      });
-    }
-
-    // ── 4. Pick a random subtopic from the syllabus ──────────
+    // ── 2. Pick ONE topic for the day (shared across all languages) ──
     const topic = SYLLABUS[Math.floor(Math.random() * SYLLABUS.length)];
 
-    // ── 5. Call Gemini 2.5 Flash ─────────────────────────────
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) {
-      return json({ error: "GEMINI_API_KEY secret is not configured" }, 500);
-    }
+    // ── 3. Generate a concept for each supported language ────
+    const results = [];
 
-    const prompt = `You are a Senior FAANG Interviewer and technical educator. \
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const langName = LANGUAGE_NAMES[lang];
+
+      // Per-language idempotency: only skip if this specific language
+      // already has a concept for today.
+      const { data: existing } = await admin
+        .from("daily_concepts")
+        .select("id")
+        .eq("date", today)
+        .eq("language", lang)
+        .maybeSingle();
+
+      if (existing) {
+        results.push({
+          language: lang,
+          skipped: true,
+          reason: "Already exists",
+          id: existing.id,
+        });
+        continue;
+      }
+
+      // Build prompt with explicit language instruction
+      const prompt = `You are a Senior FAANG Interviewer and technical educator. \
 Write a short, engaging, and highly technical article (2-3 paragraphs, roughly 250-350 words) \
 about the following topic:
 
@@ -213,89 +254,131 @@ The article should:
 Then, generate exactly 3 challenging multiple-choice questions that test deep understanding \
 (not surface-level recall). Each question must have exactly 4 options.
 
-Return ONLY a JSON object with this exact shape (no markdown, no code fences):
+LANGUAGE REQUIREMENT: You MUST write the entire article, all questions, all answer options, \
+and all explanations entirely in ${langName} (language code: "${lang}"). \
+Do NOT use English unless quoting code snippets or strictly technical identifiers (e.g. function names).
+
+CRITICAL JSON FORMAT RULES — FOLLOW EXACTLY OR THE SYSTEM WILL REJECT YOUR RESPONSE:
+1. Output ONLY raw JSON. Do NOT wrap in markdown code fences (\`\`\`json or \`\`\`). Do NOT add any text before or after the JSON.
+2. The outer object MUST have EXACTLY these English keys: "title", "content", "quiz_data". DO NOT translate these keys.
+3. "quiz_data" MUST be a JSON array of exactly 3 objects.
+4. Each quiz object MUST have EXACTLY these English keys: "question", "options", "correct_index", "explanation". DO NOT translate these keys.
+5. "options" MUST be an array of exactly 4 strings. "correct_index" MUST be an integer 0-3.
+6. ONLY the string VALUES should be written in ${langName}. The keys stay in English.
+
 {
-  "title": "<concise article title>",
-  "content": "<full article text>",
+  "title": "<concise article title in ${langName}>",
+  "content": "<full article text in ${langName}>",
   "quiz_data": [
     {
-      "question": "<question text>",
+      "question": "<question text in ${langName}>",
       "options": ["<option A>", "<option B>", "<option C>", "<option D>"],
-      "correct_index": <0-3>,
-      "explanation": "<1-2 sentence explanation of the correct answer>"
+      "correct_index": 0,
+      "explanation": "<explanation in ${langName}>"
     }
   ]
 }`;
 
-    const geminiResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.4, // slightly creative but consistent
-          },
-        }),
-      },
-    );
+      let rawContent: string;
+      try {
+        rawContent = await callGemini(geminiApiKey, prompt);
+      } catch (err) {
+        console.error(`Gemini error for lang=${lang}:`, err);
+        results.push({ language: lang, skipped: true, reason: "Gemini error" });
+        continue;
+      }
 
-    if (!geminiResp.ok) {
-      const errText = await geminiResp.text();
-      console.error("Gemini API error:", errText);
-      return json({ error: "LLM service unavailable" }, 502);
-    }
+      let parsed: { title: string; content: string; quiz_data: unknown[] };
+      try {
+        // Strip markdown code fences that Gemini sometimes wraps around JSON
+        const cleanedContent = rawContent
+          .replace(/^```(?:json)?\s*\n?/i, "")
+          .replace(/\n?\s*```\s*$/i, "")
+          .trim();
+        parsed = JSON.parse(cleanedContent);
+      } catch {
+        console.error(
+          `Failed to parse Gemini JSON for lang=${lang}:`,
+          rawContent,
+        );
+        results.push({ language: lang, skipped: true, reason: "Parse error" });
+        continue;
+      }
 
-    // ── 6. Parse Gemini response ─────────────────────────────
-    const geminiData = await geminiResp.json();
-    const rawContent: string =
-      geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      // ── Validate top-level structure ─────────────────────────
+      if (
+        typeof parsed.title !== "string" ||
+        !parsed.title ||
+        typeof parsed.content !== "string" ||
+        !parsed.content ||
+        !Array.isArray(parsed.quiz_data) ||
+        parsed.quiz_data.length < 1
+      ) {
+        console.error(`Invalid concept structure for lang=${lang}:`, parsed);
+        results.push({
+          language: lang,
+          skipped: true,
+          reason: "Invalid structure",
+        });
+        continue;
+      }
 
-    let parsed: { title: string; content: string; quiz_data: unknown[] };
-    try {
-      parsed = JSON.parse(rawContent);
-    } catch {
-      console.error("Failed to parse Gemini JSON:", rawContent);
-      return json({ error: "Failed to parse LLM response" }, 502);
-    }
+      // ── Validate each quiz item has the required English keys ──
+      const quizValid = parsed.quiz_data.every((q: Record<string, unknown>) =>
+        typeof q.question === "string" &&
+        Array.isArray(q.options) &&
+        q.options.length === 4 &&
+        typeof q.correct_index === "number" &&
+        q.correct_index >= 0 &&
+        q.correct_index <= 3 &&
+        typeof q.explanation === "string"
+      );
 
-    // Basic validation
-    if (
-      !parsed.title ||
-      !parsed.content ||
-      !Array.isArray(parsed.quiz_data) ||
-      parsed.quiz_data.length < 1
-    ) {
-      console.error("Invalid concept structure from Gemini:", parsed);
-      return json({ error: "LLM returned an invalid concept structure" }, 502);
-    }
+      if (!quizValid) {
+        console.error(
+          `quiz_data items have invalid/translated keys for lang=${lang}:`,
+          JSON.stringify(parsed.quiz_data),
+        );
+        results.push({
+          language: lang,
+          skipped: true,
+          reason: "Invalid quiz_data item structure",
+        });
+        continue;
+      }
 
-    // ── 7. Insert into daily_concepts ────────────────────────
-    const { data: inserted, error: insertError } = await admin
-      .from("daily_concepts")
-      .insert({
-        date: today,
+      const { data: inserted, error: insertError } = await admin
+        .from("daily_concepts")
+        .insert({
+          date: today,
+          language: lang,
+          title: parsed.title,
+          content: parsed.content,
+          quiz_data: parsed.quiz_data,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        console.error(`Insert error for lang=${lang}:`, insertError.message);
+        results.push({ language: lang, skipped: true, reason: "Insert error" });
+        continue;
+      }
+
+      results.push({
+        language: lang,
+        skipped: false,
+        id: inserted.id,
         title: parsed.title,
-        content: parsed.content,
-        quiz_data: parsed.quiz_data,
-      })
-      .select("id")
-      .single();
-
-    if (insertError) {
-      console.error("Insert error:", insertError.message);
-      return json({ error: "Failed to save concept" }, 500);
+      });
     }
 
     return json({
-      message: "Daily concept generated successfully",
-      id: inserted.id,
+      message: "Daily concept generation complete",
       date: today,
-      title: parsed.title,
       category: topic.category,
       subtopic: topic.subtopic,
+      results,
     });
   } catch (err) {
     console.error("Unhandled error:", err);
