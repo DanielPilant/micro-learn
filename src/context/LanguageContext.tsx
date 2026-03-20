@@ -5,6 +5,8 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { I18nManager } from "react-native";
+import * as Updates from "expo-updates";
 import { supabase } from "../services/supabase";
 import { useAuth } from "./AuthContext";
 import translations from "../i18n/translations";
@@ -24,7 +26,11 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [lang, setLangState] = useState<ContentLanguage>("en");
 
-  // Load the user's saved language preference on login
+  // Load the user's saved language preference on login.
+  // Also guards against the "fresh-install RTL trap": if the native
+  // I18nManager direction doesn't match the stored language (e.g. the
+  // user reinstalled the app), force-set RTL and reload immediately so
+  // the layout direction is always in sync with the content language.
   useEffect(() => {
     if (!user) return;
     supabase
@@ -32,9 +38,27 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       .select("content_language")
       .eq("id", user.id)
       .single()
-      .then(({ data }) => {
-        if (data?.content_language) {
-          setLangState(data.content_language as ContentLanguage);
+      .then(async ({ data }) => {
+        if (!data?.content_language) return;
+
+        const loadedLang = data.content_language as ContentLanguage;
+        setLangState(loadedLang);
+
+        const needsRTL = loadedLang === "he";
+        if (I18nManager.isRTL !== needsRTL) {
+          I18nManager.allowRTL(needsRTL);
+          I18nManager.forceRTL(needsRTL);
+          try {
+            await Updates.reloadAsync();
+          } catch {
+            if (__DEV__) {
+              const { DevSettings } = require("react-native");
+              DevSettings.reload();
+            }
+            // In production, if Updates.reloadAsync() somehow fails, the
+            // direction mismatch will self-correct on the next cold start
+            // because I18nManager state is already persisted to native.
+          }
         }
       });
   }, [user]);

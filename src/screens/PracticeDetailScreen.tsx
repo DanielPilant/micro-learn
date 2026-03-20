@@ -45,7 +45,7 @@ export default function PracticeDetailScreen({
   navigation,
 }: PracticeDetailScreenProps) {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { question } = route.params;
 
   const catColor = CATEGORY_COLOR[question.category] ?? Colors.primary;
@@ -68,6 +68,29 @@ export default function PracticeDetailScreen({
   useEffect(() => {
     fetchStreak();
   }, [fetchStreak]);
+
+  // ── Teach Me state ─────────────────────────────────────────
+  const [isTeaching, setIsTeaching] = useState(false);
+  const [teachMeExplanation, setTeachMeExplanation] = useState<string | null>(
+    null,
+  );
+  const [teachError, setTeachError] = useState<string | null>(null);
+
+  const handleTeachMe = async () => {
+    setIsTeaching(true);
+    setTeachError(null);
+    const { data, error } = await supabase.functions.invoke<{
+      explanation: string;
+    }>("teach-me", {
+      body: { question_text: question.question, language: lang },
+    });
+    setIsTeaching(false);
+    if (error || !data?.explanation) {
+      setTeachError(t("detail.teachFailed"));
+    } else {
+      setTeachMeExplanation(data.explanation);
+    }
+  };
 
   // ── Submission state machine ───────────────────────────────
   // Phase 1 – submitting:  INSERT into user_answers
@@ -138,7 +161,7 @@ export default function PracticeDetailScreen({
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <StatusBar style="light" />
       <ScrollView
@@ -202,6 +225,73 @@ export default function PracticeDetailScreen({
             <Text style={styles.hintText}>{question.hint}</Text>
           </View>
         ) : null}
+
+        {/* ── Teach Me ── */}
+        {!submitted && (
+          <>
+            {/* Loading state */}
+            {isTeaching && (
+              <View style={styles.teachLoadingBox}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.teachLoadingText}>
+                  {t("detail.teaching")}
+                </Text>
+              </View>
+            )}
+
+            {/* Explanation card (shown once explanation arrives) */}
+            {!isTeaching && teachMeExplanation !== null && (
+              <View style={styles.teachCard}>
+                <View style={styles.teachCardHeader}>
+                  <Ionicons
+                    name="school-outline"
+                    size={15}
+                    color={Colors.primary}
+                  />
+                  <Text style={styles.teachCardLabel}>
+                    {t("detail.conceptExplainer")}
+                  </Text>
+                </View>
+                <Text style={styles.teachCardBody}>{teachMeExplanation}</Text>
+                <TouchableOpacity
+                  style={styles.gotItBtn}
+                  onPress={() => setTeachMeExplanation(null)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={16}
+                    color={Colors.primary}
+                  />
+                  <Text style={styles.gotItText}>{t("detail.gotIt")}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Error state */}
+            {!isTeaching && teachError !== null && (
+              <Text style={styles.teachErrorText}>{teachError}</Text>
+            )}
+
+            {/* Teach Me trigger button — hidden once explanation is visible */}
+            {!isTeaching && teachMeExplanation === null && (
+              <TouchableOpacity
+                style={styles.teachMeBtn}
+                onPress={handleTeachMe}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name="bulb-outline"
+                  size={16}
+                  color={Colors.primary}
+                />
+                <Text style={styles.teachMeBtnText}>
+                  {t("detail.teachMe")}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
 
         {/* ── Answer input (hidden after submission) ── */}
         {!submitted && (
@@ -287,7 +377,7 @@ const styles = StyleSheet.create({
   container: {
     padding: Spacing.lg,
     paddingTop: 60,
-    paddingBottom: Spacing.xl,
+    paddingBottom: 80,
   },
 
   // ── Top bar ──
@@ -463,5 +553,92 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 15,
     fontWeight: "600",
+  },
+
+  // ── Teach Me button ──
+  teachMeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.primary + "55",
+    backgroundColor: Colors.primary + "0D",
+    marginBottom: Spacing.md,
+  },
+  teachMeBtnText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  // ── Teach Me loading ──
+  teachLoadingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  teachLoadingText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+  },
+
+  // ── Concept Explainer card ──
+  teachCard: {
+    backgroundColor: Colors.primary + "0D",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + "40",
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  teachCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  teachCardLabel: {
+    color: Colors.primary,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+  teachCardBody: {
+    color: Colors.textPrimary,
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: "auto",
+    marginBottom: Spacing.md,
+  },
+
+  // ── Got it button ──
+  gotItBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary + "55",
+  },
+  gotItText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  // ── Teach error ──
+  teachErrorText: {
+    color: Colors.error,
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
   },
 });

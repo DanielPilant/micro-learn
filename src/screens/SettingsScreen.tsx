@@ -68,8 +68,14 @@ export default function SettingsScreen(_: SettingsScreenProps) {
       try {
         await Updates.reloadAsync();
       } catch {
-        // expo-updates throws in dev mode — fall back to a manual restart prompt
-        Alert.alert(t("settings.restartTitle"), t("settings.restartMsg"));
+        // expo-updates throws in dev mode (Expo Go / Metro) — use DevSettings
+        // to force a JS bundle reload, which re-applies the native RTL flag.
+        if (__DEV__) {
+          const { DevSettings } = require("react-native");
+          DevSettings.reload();
+        } else {
+          Alert.alert(t("settings.restartTitle"), t("settings.restartMsg"));
+        }
       }
     }
   };

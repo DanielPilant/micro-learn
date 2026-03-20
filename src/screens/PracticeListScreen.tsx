@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  I18nManager,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "@react-navigation/native";
@@ -46,7 +47,7 @@ export default function PracticeListScreen({
   navigation,
 }: PracticeListScreenProps) {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -60,18 +61,11 @@ export default function PracticeListScreen({
     setListLoading(true);
     setListError(null);
 
-    // Fetch the user's preferred language first, then scope the inbox to it
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("content_language")
-      .eq("id", user.id)
-      .single();
-
-    const userLang = profileData?.content_language ?? "en";
-
+    // lang is already owned by LanguageContext (sourced from Supabase profiles).
+    // Re-fetching content_language here was redundant — consume it directly.
     const { data, error } = await supabase.rpc("get_unanswered_questions", {
       p_user_id: user.id,
-      p_language: userLang,
+      p_language: lang,
     });
 
     if (error) {
@@ -80,7 +74,7 @@ export default function PracticeListScreen({
       setQuestions((data as Question[]) ?? []);
     }
     setListLoading(false);
-  }, [user]);
+  }, [user, lang]);
 
   useFocusEffect(
     useCallback(() => {
@@ -147,7 +141,7 @@ export default function PracticeListScreen({
             <View style={styles.cardFooter}>
               <Text style={styles.indexLabel}>#{index + 1}</Text>
               <Ionicons
-                name="chevron-forward"
+                name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"}
                 size={14}
                 color={Colors.textSecondary}
               />

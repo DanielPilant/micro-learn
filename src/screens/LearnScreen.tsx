@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  I18nManager,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "@react-navigation/native";
@@ -48,10 +49,13 @@ function Quiz({ questions, onComplete, t }: QuizProps) {
 
   const handleNext = () => {
     if (isLast) {
-      const finalScore = correctCount + (isCorrect ? 0 : 0);
-      // correctCount already includes this question if correct
+      // isCorrect reflects whether the *last* answer was right. correctCount
+      // tracks all *previous* correct answers (state hasn't flushed the last
+      // handleSelect increment yet when this runs synchronously), so we add
+      // the last question's result explicitly to get the true final score.
+      const finalScore = correctCount + (isCorrect ? 1 : 0);
       setFinished(true);
-      onComplete(correctCount);
+      onComplete(finalScore);
       return;
     }
     setCurrentIndex((i) => i + 1);
@@ -146,7 +150,13 @@ function Quiz({ questions, onComplete, t }: QuizProps) {
             {isLast ? t("learn.seeResults") : t("learn.nextQuestion")}
           </Text>
           <Ionicons
-            name={isLast ? "trophy-outline" : "arrow-forward"}
+            name={
+              isLast
+                ? "trophy-outline"
+                : I18nManager.isRTL
+                  ? "arrow-back"
+                  : "arrow-forward"
+            }
             size={18}
             color="#fff"
           />

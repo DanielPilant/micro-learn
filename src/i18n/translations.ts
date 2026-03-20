@@ -49,6 +49,11 @@ const translations = {
       "Evaluation unavailable right now. Your answer has been saved.",
     "detail.backToInbox": "Back to Inbox",
     "detail.placeholder": "Type your answer here\u2026",
+    "detail.teachMe": "I don't know this \u2014 Teach Me",
+    "detail.teaching": "Gemini is explaining\u2026",
+    "detail.teachFailed": "Could not load explanation. Please try again.",
+    "detail.conceptExplainer": "CONCEPT EXPLAINER",
+    "detail.gotIt": "Got it, I\u2019m ready to answer",
 
     // ── ReadinessScreen ──
     "progress.title": "Progress",
@@ -150,6 +155,15 @@ const translations = {
       "\u05D7\u05D6\u05E8\u05D4 \u05DC\u05EA\u05D9\u05D1\u05D4",
     "detail.placeholder":
       "\u05DB\u05EA\u05D1\u05D5 \u05D0\u05EA \u05EA\u05E9\u05D5\u05D1\u05EA\u05DB\u05DD \u05DB\u05D0\u05DF\u2026",
+    "detail.teachMe":
+      "\u05D0\u05E0\u05D9 \u05DC\u05D0 \u05DE\u05DB\u05D9\u05E8 \u05D0\u05EA \u05D4\u05E7\u05D5\u05E0\u05E6\u05E4\u05E6\u05D9\u05D4 \u2014 \u05DC\u05DE\u05D3 \u05D0\u05D5\u05EA\u05D9",
+    "detail.teaching": "Gemini \u05DE\u05E1\u05D1\u05D9\u05E8\u2026",
+    "detail.teachFailed":
+      "\u05DC\u05D0 \u05E0\u05D9\u05EA\u05DF \u05DC\u05D8\u05E2\u05D5\u05DF \u05D0\u05EA \u05D4\u05D4\u05E1\u05D1\u05E8. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.",
+    "detail.conceptExplainer":
+      "\u05DE\u05E1\u05D1\u05D9\u05E8 \u05E7\u05D5\u05E0\u05E6\u05E4\u05E6\u05D9\u05D4",
+    "detail.gotIt":
+      "\u05D4\u05D1\u05E0\u05EA\u05D9, \u05D0\u05E0\u05D9 \u05DE\u05D5\u05DB\u05DF \u05DC\u05E2\u05E0\u05D5\u05EA",
 
     // ── ReadinessScreen ──
     "progress.title": "\u05D4\u05EA\u05E7\u05D3\u05DE\u05D5\u05EA",
