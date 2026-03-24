@@ -3,6 +3,12 @@ import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
 import type { Profile } from "../types";
 
+/** Shape returned by the `user_answers` + `questions(category)` join. */
+interface AnswerWithCategory {
+  score: number | null;
+  questions: { category: string }[] | null;
+}
+
 export interface CategoryReadiness {
   category: string;
   avgScore: number;
@@ -32,7 +38,7 @@ export function useReadiness(): ReadinessState {
     // ── 1. Fetch profile for streak data ──────────────────────
     const { data: profileData, error: profileErr } = await supabase
       .from("profiles")
-      .select("id, display_name, current_streak, longest_streak")
+      .select("id, display_name, current_streak, longest_streak, content_language")
       .eq("id", user.id)
       .single();
 
@@ -59,9 +65,8 @@ export function useReadiness(): ReadinessState {
 
     // ── 3. Aggregate per-category client-side ──────────────────
     const map: Record<string, { total: number; count: number }> = {};
-    for (const row of answersData ?? []) {
-      const cat = (row.questions as unknown as { category: string } | null)
-        ?.category;
+    for (const row of (answersData ?? []) as AnswerWithCategory[]) {
+      const cat = row.questions?.[0]?.category;
       if (!cat || row.score == null) continue;
       if (!map[cat]) map[cat] = { total: 0, count: 0 };
       map[cat].total += row.score;

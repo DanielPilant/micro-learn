@@ -17,28 +17,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
-import { Colors, Spacing } from "../constants/theme";
+import {
+  Colors,
+  Spacing,
+  DifficultyColor,
+  CategoryColor,
+  CATEGORY_FALLBACK_COLOR,
+} from "../constants/theme";
+import { formatCategory } from "../utils/formatting";
 import EvaluationCard from "../components/EvaluationCard";
 import type { EvaluationResult } from "../types";
 import type { PracticeDetailScreenProps } from "../navigation/types";
-
-// ── Difficulty pill colours (mirrors PracticeListScreen) ─────
-const DIFFICULTY_COLOR: Record<string, string> = {
-  easy: Colors.success,
-  medium: "#F59E0B",
-  hard: Colors.error,
-};
-
-const CATEGORY_COLOR: Record<string, string> = {
-  system_design: "#818CF8",
-  algorithms: "#34D399",
-  dsa_theory: "#34D399",
-  databases: "#F59E0B",
-  networking: "#38BDF8",
-  operating_systems: "#FB923C",
-  devops: "#A78BFA",
-  fullstack_api: "#F472B6",
-};
 
 export default function PracticeDetailScreen({
   route,
@@ -48,9 +37,9 @@ export default function PracticeDetailScreen({
   const { t, lang } = useLanguage();
   const { question } = route.params;
 
-  const catColor = CATEGORY_COLOR[question.category] ?? Colors.primary;
+  const catColor = CategoryColor[question.category] ?? CATEGORY_FALLBACK_COLOR;
   const diffColor =
-    DIFFICULTY_COLOR[question.difficulty] ?? Colors.textSecondary;
+    DifficultyColor[question.difficulty] ?? Colors.textSecondary;
 
   // ── Streak ─────────────────────────────────────────────────
   const [streak, setStreak] = useState<number | null>(null);
@@ -187,7 +176,7 @@ export default function PracticeDetailScreen({
 
           {streak !== null && (
             <View style={styles.streakBadge}>
-              <Ionicons name="flame" size={13} color="#F59E0B" />
+              <Ionicons name="flame" size={13} color={Colors.amber} />
               <Text style={styles.streakText}>{streak}</Text>
             </View>
           )}
@@ -199,7 +188,7 @@ export default function PracticeDetailScreen({
             style={[styles.categoryBadge, { backgroundColor: catColor + "22" }]}
           >
             <Text style={[styles.categoryText, { color: catColor }]}>
-              {question.category.replace(/_/g, " ").toUpperCase()}
+              {formatCategory(question.category).toUpperCase()}
             </Text>
           </View>
           <View

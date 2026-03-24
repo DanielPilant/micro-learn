@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  View,
   Text,
   TextInput,
   TouchableOpacity,
@@ -13,45 +12,51 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { Colors, Spacing } from "../constants/theme";
 import type { SignUpScreenProps } from "../navigation/types";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function SignUpScreen({ navigation }: SignUpScreenProps) {
   const { signUp } = useAuth();
+  const { t } = useLanguage();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignUp = async () => {
-    if (!displayName.trim() || !email.trim() || !password) {
-      Alert.alert("Missing fields", "Please fill in all fields.");
+    const trimmedEmail = email.trim();
+    if (!displayName.trim() || !trimmedEmail || !password) {
+      Alert.alert(t("auth.missingFields"), t("auth.missingFieldsMsg"));
+      return;
+    }
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      Alert.alert(t("auth.invalidEmail"), t("auth.invalidEmailMsg"));
       return;
     }
     if (password.length < 6) {
-      Alert.alert("Weak password", "Password must be at least 6 characters.");
+      Alert.alert(t("auth.weakPassword"), t("auth.weakPasswordMsg"));
       return;
     }
     setLoading(true);
     const { error, needsConfirmation } = await signUp(
-      email,
+      trimmedEmail,
       password,
       displayName,
     );
     setLoading(false);
 
     if (error) {
-      Alert.alert("Sign up failed", error);
+      Alert.alert(t("auth.signUpFailed"), error);
       return;
     }
 
     if (needsConfirmation) {
-      // Email confirmation is enabled in Supabase Dashboard.
-      Alert.alert(
-        "Check your email",
-        "We sent you a confirmation link. Verify your email then sign in.",
-        [{ text: "OK", onPress: () => navigation.navigate("SignIn") }],
-      );
+      Alert.alert(t("auth.checkEmail"), t("auth.checkEmailMsg"), [
+        { text: "OK", onPress: () => navigation.navigate("SignIn") },
+      ]);
     }
     // If needsConfirmation is false, a session was created immediately and
     // RootNavigator will automatically switch to the App stack.

@@ -2,33 +2,27 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Colors, Spacing } from "../constants/theme";
 import { useLanguage } from "../context/LanguageContext";
+import { scoreColor } from "../utils/formatting";
 import type { EvaluationResult } from "../types";
 
-// ── Score interpretation helpers ─────────────────────────────
+// ── Score label helpers ──────────────────────────────────────
 
-const AMBER = "#F59E0B";
-
-function getScoreColor(score: number): string {
-  if (score >= 90) return Colors.success; // green
-  if (score >= 70) return Colors.primary; // blue
-  if (score >= 40) return AMBER; // amber
-  return Colors.error; // red
+function getScoreLabel(
+  s: number,
+  t: (key: any) => string,
+): string {
+  if (s >= 80) return t("eval.excellent");
+  if (s >= 60) return t("eval.good");
+  if (s >= 40) return t("eval.developing");
+  return t("eval.needsWork");
 }
 
 // ── Component ────────────────────────────────────────────────
 
-export default function EvaluationCard({ score, feedback }: EvaluationResult) {
+export default React.memo(function EvaluationCard({ score, feedback }: EvaluationResult) {
   const { t } = useLanguage();
-  const color = getScoreColor(score);
-
-  function getScoreLabel(s: number): string {
-    if (s >= 90) return t("eval.excellent");
-    if (s >= 70) return t("eval.good");
-    if (s >= 40) return t("eval.developing");
-    return t("eval.needsWork");
-  }
-
-  const label = getScoreLabel(score);
+  const color = scoreColor(score);
+  const label = getScoreLabel(score, t);
 
   return (
     <View style={styles.card}>
@@ -60,7 +54,7 @@ export default function EvaluationCard({ score, feedback }: EvaluationResult) {
       <Text style={styles.feedbackText}>{feedback}</Text>
     </View>
   );
-}
+});
 
 // ── Styles ───────────────────────────────────────────────────
 const styles = StyleSheet.create({

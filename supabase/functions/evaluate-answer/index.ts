@@ -9,27 +9,10 @@
 //   5. Persist score + feedback back to user_answers
 //   6. Return { score, feedback } to the React Native client
 
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-// ── CORS ─────────────────────────────────────────────────────
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
-}
-
-// ── Language config ───────────────────────────────────────────
-const LANGUAGE_NAMES: Record<string, string> = {
-  en: "English",
-  he: "Hebrew",
-};
+import { json, optionsResponse } from "../_shared/response.ts";
+import { createAdminClient, extractBearerToken } from "../_shared/auth.ts";
+import { requireGeminiKey, callGemini } from "../_shared/gemini.ts";
+import { LANGUAGE_NAMES } from "../_shared/language.ts";
 
 interface EvalResult {
   score: number;
@@ -38,9 +21,7 @@ interface EvalResult {
 
 // ── Main handler ─────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS });
-  }
+  if (req.method === "OPTIONS") return optionsResponse();
 
   try {
     // ── 1. Parse request ─────────────────────────────────────
@@ -50,18 +31,12 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 2. Verify JWT ────────────────────────────────────────
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
+    const jwt = extractBearerToken(req);
+    if (!jwt) {
       return json({ error: "Missing or malformed Authorization header" }, 401);
     }
-    const jwt = authHeader.slice(7);
 
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
-    );
-
+    const admin = createAdminClient();
     const {
       data: { user },
       error: authError,
@@ -105,10 +80,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 6. Call Gemini 2.5 Flash ─────────────────────────────
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) {
-      return json({ error: "GEMINI_API_KEY secret is not configured" }, 500);
-    }
+    const geminiApiKey = requireGeminiKey();
 
     const prompt = `You are a senior software engineer conducting a FAANG-level \
 technical interview. Evaluate the candidate's answer for technical correctness, \
@@ -129,32 +101,15 @@ protocol names). The JSON field names must remain in English.
 Return ONLY a JSON object with this exact shape (no markdown, no code fences):
 {"score": <integer 0-100>, "feedback": "<2-3 specific, constructive sentences in ${languageName}>"}`;
 
-    const geminiResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.1, // low variance = consistent scoring
-          },
-        }),
-      },
-    );
-
-    if (!geminiResp.ok) {
-      const errText = await geminiResp.text();
-      console.error("Gemini API error:", errText);
+    let rawContent: string;
+    try {
+      rawContent = await callGemini(geminiApiKey, prompt, { temperature: 0.1 });
+    } catch (err) {
+      console.error("Gemini API error:", err);
       return json({ error: "LLM service unavailable" }, 502);
     }
 
     // ── 7. Parse Gemini response ──────────────────────────────
-    const geminiData = await geminiResp.json();
-    const rawContent: string =
-      geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
     let evalResult: EvalResult;
     try {
       evalResult = JSON.parse(rawContent);

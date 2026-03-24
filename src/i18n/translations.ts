@@ -6,6 +6,19 @@ const translations = {
     "tab.progress": "Progress",
     "tab.settings": "Settings",
 
+    // ── Auth screens ──
+    "auth.missingFields": "Missing fields",
+    "auth.missingFieldsMsg": "Please fill in all fields.",
+    "auth.invalidEmail": "Invalid email",
+    "auth.invalidEmailMsg": "Please enter a valid email address.",
+    "auth.weakPassword": "Weak password",
+    "auth.weakPasswordMsg": "Password must be at least 6 characters.",
+    "auth.signInFailed": "Sign in failed",
+    "auth.signUpFailed": "Sign up failed",
+    "auth.checkEmail": "Check your email",
+    "auth.checkEmailMsg":
+      "We sent you a confirmation link. Verify your email then sign in.",
+
     // ── LearnScreen ──
     "learn.appName": "micro-learn",
     "learn.signOut": "Sign out",
@@ -93,6 +106,19 @@ const translations = {
     "tab.practice": "\u05EA\u05E8\u05D2\u05D5\u05DC",
     "tab.progress": "\u05D4\u05EA\u05E7\u05D3\u05DE\u05D5\u05EA",
     "tab.settings": "\u05D4\u05D2\u05D3\u05E8\u05D5\u05EA",
+
+    // ── Auth screens ──
+    "auth.missingFields": "\u05E9\u05D3\u05D5\u05EA \u05D7\u05E1\u05E8\u05D9\u05DD",
+    "auth.missingFieldsMsg": "\u05E0\u05D0 \u05DE\u05DC\u05D0 \u05D0\u05EA \u05DB\u05DC \u05D4\u05E9\u05D3\u05D5\u05EA.",
+    "auth.invalidEmail": "\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF",
+    "auth.invalidEmailMsg": "\u05E0\u05D0 \u05D4\u05D6\u05DF \u05DB\u05EA\u05D5\u05D1\u05EA \u05D0\u05D9\u05DE\u05D9\u05D9\u05DC \u05EA\u05E7\u05D9\u05E0\u05D4.",
+    "auth.weakPassword": "\u05E1\u05D9\u05E1\u05DE\u05D4 \u05D7\u05DC\u05E9\u05D4",
+    "auth.weakPasswordMsg": "\u05D4\u05E1\u05D9\u05E1\u05DE\u05D4 \u05D7\u05D9\u05D9\u05D1\u05EA \u05DC\u05D4\u05DB\u05D9\u05DC \u05DC\u05E4\u05D7\u05D5\u05EA 6 \u05EA\u05D5\u05D5\u05D9\u05DD.",
+    "auth.signInFailed": "\u05D4\u05D4\u05EA\u05D7\u05D1\u05E8\u05D5\u05EA \u05E0\u05DB\u05E9\u05DC\u05D4",
+    "auth.signUpFailed": "\u05D4\u05D4\u05E8\u05E9\u05DE\u05D4 \u05E0\u05DB\u05E9\u05DC\u05D4",
+    "auth.checkEmail": "\u05D1\u05D3\u05D5\u05E7 \u05D0\u05EA \u05D4\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC",
+    "auth.checkEmailMsg":
+      "\u05E9\u05DC\u05D7\u05E0\u05D5 \u05DC\u05DA \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D0\u05D9\u05DE\u05D5\u05EA. \u05D0\u05DE\u05EA \u05D0\u05EA \u05D4\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC \u05D5\u05D0\u05D6 \u05D4\u05EA\u05D7\u05D1\u05E8.",
 
     // ── LearnScreen ──
     "learn.appName": "micro-learn",

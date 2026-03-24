@@ -12,26 +12,35 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { Colors, Spacing } from "../constants/theme";
 import type { SignInScreenProps } from "../navigation/types";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function SignInScreen({ navigation }: SignInScreenProps) {
   const { signIn } = useAuth();
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignIn = async () => {
-    if (!email.trim() || !password) {
-      Alert.alert("Missing fields", "Please enter your email and password.");
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      Alert.alert(t("auth.missingFields"), t("auth.missingFieldsMsg"));
+      return;
+    }
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      Alert.alert(t("auth.invalidEmail"), t("auth.invalidEmailMsg"));
       return;
     }
     setLoading(true);
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(trimmedEmail, password);
     setLoading(false);
 
     if (error) {
-      Alert.alert("Sign in failed", error);
+      Alert.alert(t("auth.signInFailed"), error);
     }
     // On success, onAuthStateChange fires in AuthContext and RootNavigator
     // automatically swaps to the App stack. No manual navigation needed.

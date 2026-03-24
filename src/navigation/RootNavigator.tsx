@@ -28,9 +28,11 @@ function AuthNavigator() {
   );
 }
 
+type IoniconsName = React.ComponentProps<typeof Ionicons>["name"];
+
 const TAB_ICONS: Record<
   keyof AppTabParamList,
-  { focused: string; default: string }
+  { focused: IoniconsName; default: IoniconsName }
 > = {
   Learn: { focused: "library", default: "library-outline" },
   Practice: { focused: "book", default: "book-outline" },
@@ -56,7 +58,7 @@ function AppNavigator() {
         tabBarIcon: ({ focused, color, size }) => {
           const icons = TAB_ICONS[route.name];
           const icon = focused ? icons.focused : icons.default;
-          return <Ionicons name={icon as any} size={size} color={color} />;
+          return <Ionicons name={icon} size={size} color={color} />;
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textSecondary,

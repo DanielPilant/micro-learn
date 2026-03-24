@@ -48,7 +48,7 @@ export interface DailyConcept {
   date: string;
   title: string;
   content: string;
-  quiz_data: QuizQuestion[];
+  quiz_data: QuizQuestion[] | null;
   language: "en" | "he";
 }
 

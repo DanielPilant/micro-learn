@@ -11,149 +11,15 @@
 //   - Supabase Auth JWT (mobile "Generate More" button) → fetches the user's
 //     content_language from profiles and generates 5 for that language only.
 
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-// ── CORS ─────────────────────────────────────────────────────
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
-}
-
-// ── Language config ───────────────────────────────────────────
-const SUPPORTED_LANGUAGES = ["en", "he"] as const;
-type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
-
-const LANGUAGE_NAMES: Record<SupportedLanguage, string> = {
-  en: "English",
-  he: "Hebrew",
-};
-
-// ── FAANG Interview Syllabus ──────────────────────────────────
-interface SyllabusTopic {
-  category: string;
-  subtopic: string;
-}
-
-const SYLLABUS: SyllabusTopic[] = [
-  // DSA
-  {
-    category: "DSA",
-    subtopic: "Big O Notation & Time/Space Complexity Analysis",
-  },
-  {
-    category: "DSA",
-    subtopic: "Hash Tables: Internals, Collision Resolution & Use Cases",
-  },
-  {
-    category: "DSA",
-    subtopic: "Trees: Binary Search Trees, AVL Trees & Red-Black Trees",
-  },
-  {
-    category: "DSA",
-    subtopic: "Graphs: BFS, DFS, Dijkstra & Topological Sort",
-  },
-  {
-    category: "DSA",
-    subtopic: "Dynamic Programming: Memoization vs Tabulation",
-  },
-  { category: "DSA", subtopic: "Sliding Window & Two-Pointer Techniques" },
-
-  // System Design
-  {
-    category: "System Design",
-    subtopic: "CAP Theorem & Trade-offs in Distributed Systems",
-  },
-  {
-    category: "System Design",
-    subtopic: "Load Balancing: Algorithms & Layer 4 vs Layer 7",
-  },
-  {
-    category: "System Design",
-    subtopic:
-      "Caching Strategies: Write-Through, Write-Back & Eviction Policies",
-  },
-  {
-    category: "System Design",
-    subtopic: "Database Sharding: Horizontal Partitioning & Consistent Hashing",
-  },
-  {
-    category: "System Design",
-    subtopic: "Message Queues: Kafka, RabbitMQ & Event-Driven Architecture",
-  },
-
-  // Fullstack & API
-  {
-    category: "Fullstack & API",
-    subtopic: "REST vs gRPC vs GraphQL: Trade-offs & When to Use Each",
-  },
-  {
-    category: "Fullstack & API",
-    subtopic: "The Event Loop: Node.js Concurrency Model in Depth",
-  },
-  {
-    category: "Fullstack & API",
-    subtopic: "JWT & OAuth 2.0: Token-Based Authentication Flows",
-  },
-  {
-    category: "Fullstack & API",
-    subtopic: "Web Security: XSS, CSRF & Content Security Policies",
-  },
-
-  // Networks
-  {
-    category: "Networks",
-    subtopic: "TCP vs UDP: Reliability, Flow Control & Congestion Handling",
-  },
-  {
-    category: "Networks",
-    subtopic: "DNS Resolution: Recursive Lookups, Caching & Anycast",
-  },
-  {
-    category: "Networks",
-    subtopic:
-      "TLS Handshake: Certificate Chains, Key Exchange & Perfect Forward Secrecy",
-  },
-
-  // Operating Systems
-  {
-    category: "OS",
-    subtopic: "Processes vs Threads: Scheduling, Context Switching & IPC",
-  },
-  {
-    category: "OS",
-    subtopic: "Deadlocks: Conditions, Detection, Prevention & Avoidance",
-  },
-  {
-    category: "OS",
-    subtopic: "Memory Management: Paging, Segmentation & Virtual Memory",
-  },
-
-  // DevOps
-  {
-    category: "DevOps",
-    subtopic: "Containers: Docker Internals, Namespaces & Cgroups",
-  },
-  {
-    category: "DevOps",
-    subtopic: "Kubernetes Pods: Scheduling, Services & Autoscaling",
-  },
-  {
-    category: "DevOps",
-    subtopic: "CI/CD Pipelines: Build, Test & Deployment Automation",
-  },
-  {
-    category: "DevOps",
-    subtopic: "Infrastructure as Code: Terraform, Declarative vs Imperative",
-  },
-];
+import { json, optionsResponse } from "../_shared/response.ts";
+import { createAdminClient, extractBearerToken } from "../_shared/auth.ts";
+import { requireGeminiKey, callGemini } from "../_shared/gemini.ts";
+import {
+  SUPPORTED_LANGUAGES,
+  LANGUAGE_NAMES,
+  type SupportedLanguage,
+} from "../_shared/language.ts";
+import { SYLLABUS } from "../_shared/syllabus.ts";
 
 // ── Helpers ──────────────────────────────────────────────────
 function pickRandom<T>(arr: T[], count: number): T[] {
@@ -220,30 +86,7 @@ Return ONLY a JSON array with exactly 5 objects (no markdown, no code fences):
   }
 ]`;
 
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.7,
-        },
-      }),
-    },
-  );
-
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`Gemini API error for lang=${lang}: ${errText}`);
-  }
-
-  const geminiData = await resp.json();
-  const rawContent: string =
-    geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
+  const rawContent = await callGemini(apiKey, prompt, { temperature: 0.7 });
   const parsed: ParsedQuestion[] = JSON.parse(rawContent);
 
   if (!Array.isArray(parsed) || parsed.length === 0) {
@@ -255,28 +98,17 @@ Return ONLY a JSON array with exactly 5 objects (no markdown, no code fences):
 
 // ── Main handler ─────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS });
-  }
+  if (req.method === "OPTIONS") return optionsResponse();
 
   try {
     // ── 1. Dual auth: CRON_SECRET or Supabase JWT ────────────
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
+    const token = extractBearerToken(req);
+    if (!token) {
       return json({ error: "Missing or malformed Authorization header" }, 401);
     }
-    const token = authHeader.slice(7);
 
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
-    );
-
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) {
-      return json({ error: "GEMINI_API_KEY secret is not configured" }, 500);
-    }
+    const admin = createAdminClient();
+    const geminiApiKey = requireGeminiKey();
 
     const cronSecret = Deno.env.get("CRON_SECRET");
     let languagesToGenerate: string[];

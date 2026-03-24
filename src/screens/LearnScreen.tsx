@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   I18nManager,
+  type ViewStyle,
+  type TextStyle,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "@react-navigation/native";
@@ -18,7 +20,6 @@ import { Colors, Spacing } from "../constants/theme";
 import type { LearnScreenProps } from "../navigation/types";
 import type { QuizQuestion } from "../types";
 
-const AMBER = "#F59E0B";
 
 // ── Quiz sub-component (one question at a time) ──────────────
 
@@ -35,14 +36,19 @@ function Quiz({ questions, onComplete, t }: QuizProps) {
   const [finished, setFinished] = useState(false);
 
   const q = questions[currentIndex];
+  // Guard against AI returning an out-of-bounds correct_index
+  const safeCorrectIndex =
+    q.correct_index >= 0 && q.correct_index < q.options.length
+      ? q.correct_index
+      : 0;
   const isAnswered = selectedIndex !== null;
-  const isCorrect = selectedIndex === q.correct_index;
+  const isCorrect = selectedIndex === safeCorrectIndex;
   const isLast = currentIndex === questions.length - 1;
 
   const handleSelect = (idx: number) => {
     if (isAnswered) return;
     setSelectedIndex(idx);
-    if (idx === q.correct_index) {
+    if (idx === safeCorrectIndex) {
       setCorrectCount((c) => c + 1);
     }
   };
@@ -92,11 +98,11 @@ function Quiz({ questions, onComplete, t }: QuizProps) {
 
       {/* Options */}
       {q.options.map((option, idx) => {
-        let optionStyle = styles.optionDefault;
-        let textStyle = styles.optionTextDefault;
+        let optionStyle: ViewStyle = styles.optionDefault;
+        let textStyle: TextStyle = styles.optionTextDefault;
 
         if (isAnswered) {
-          if (idx === q.correct_index) {
+          if (idx === safeCorrectIndex) {
             optionStyle = styles.optionCorrect;
             textStyle = styles.optionTextCorrect;
           } else if (idx === selectedIndex) {
@@ -181,7 +187,7 @@ function CompletionCard({
     score === total
       ? Colors.success
       : score >= Math.ceil(total / 2)
-        ? AMBER
+        ? Colors.amber
         : Colors.error;
 
   return (

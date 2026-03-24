@@ -13,179 +13,15 @@
 //        c. INSERT into daily_concepts with the language tag
 //   4. Return a summary of what was inserted
 
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-// ── CORS ─────────────────────────────────────────────────────
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
-}
-
-// ── Language config ───────────────────────────────────────────
-const SUPPORTED_LANGUAGES = ["en", "he"] as const;
-type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
-
-const LANGUAGE_NAMES: Record<SupportedLanguage, string> = {
-  en: "English",
-  he: "Hebrew",
-};
-
-// ── FAANG Interview Syllabus ──────────────────────────────────
-interface SyllabusTopic {
-  category: string;
-  subtopic: string;
-}
-
-const SYLLABUS: SyllabusTopic[] = [
-  // DSA
-  {
-    category: "DSA",
-    subtopic: "Big O Notation & Time/Space Complexity Analysis",
-  },
-  {
-    category: "DSA",
-    subtopic: "Hash Tables: Internals, Collision Resolution & Use Cases",
-  },
-  {
-    category: "DSA",
-    subtopic: "Trees: Binary Search Trees, AVL Trees & Red-Black Trees",
-  },
-  {
-    category: "DSA",
-    subtopic: "Graphs: BFS, DFS, Dijkstra & Topological Sort",
-  },
-  {
-    category: "DSA",
-    subtopic: "Dynamic Programming: Memoization vs Tabulation",
-  },
-  { category: "DSA", subtopic: "Sliding Window & Two-Pointer Techniques" },
-
-  // System Design
-  {
-    category: "System Design",
-    subtopic: "CAP Theorem & Trade-offs in Distributed Systems",
-  },
-  {
-    category: "System Design",
-    subtopic: "Load Balancing: Algorithms & Layer 4 vs Layer 7",
-  },
-  {
-    category: "System Design",
-    subtopic:
-      "Caching Strategies: Write-Through, Write-Back & Eviction Policies",
-  },
-  {
-    category: "System Design",
-    subtopic: "Database Sharding: Horizontal Partitioning & Consistent Hashing",
-  },
-  {
-    category: "System Design",
-    subtopic: "Message Queues: Kafka, RabbitMQ & Event-Driven Architecture",
-  },
-
-  // Fullstack & API
-  {
-    category: "Fullstack & API",
-    subtopic: "REST vs gRPC vs GraphQL: Trade-offs & When to Use Each",
-  },
-  {
-    category: "Fullstack & API",
-    subtopic: "The Event Loop: Node.js Concurrency Model in Depth",
-  },
-  {
-    category: "Fullstack & API",
-    subtopic: "JWT & OAuth 2.0: Token-Based Authentication Flows",
-  },
-  {
-    category: "Fullstack & API",
-    subtopic: "Web Security: XSS, CSRF & Content Security Policies",
-  },
-
-  // Networks
-  {
-    category: "Networks",
-    subtopic: "TCP vs UDP: Reliability, Flow Control & Congestion Handling",
-  },
-  {
-    category: "Networks",
-    subtopic: "DNS Resolution: Recursive Lookups, Caching & Anycast",
-  },
-  {
-    category: "Networks",
-    subtopic:
-      "TLS Handshake: Certificate Chains, Key Exchange & Perfect Forward Secrecy",
-  },
-
-  // Operating Systems
-  {
-    category: "OS",
-    subtopic: "Processes vs Threads: Scheduling, Context Switching & IPC",
-  },
-  {
-    category: "OS",
-    subtopic: "Deadlocks: Conditions, Detection, Prevention & Avoidance",
-  },
-  {
-    category: "OS",
-    subtopic: "Memory Management: Paging, Segmentation & Virtual Memory",
-  },
-
-  // DevOps
-  {
-    category: "DevOps",
-    subtopic: "Containers: Docker Internals, Namespaces & Cgroups",
-  },
-  {
-    category: "DevOps",
-    subtopic: "Kubernetes Pods: Scheduling, Services & Autoscaling",
-  },
-  {
-    category: "DevOps",
-    subtopic: "CI/CD Pipelines: Build, Test & Deployment Automation",
-  },
-  {
-    category: "DevOps",
-    subtopic: "Infrastructure as Code: Terraform, Declarative vs Imperative",
-  },
-];
-
-// ── Gemini helper ─────────────────────────────────────────────
-async function callGemini(apiKey: string, prompt: string): Promise<string> {
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.4,
-        },
-      }),
-    },
-  );
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`Gemini API error: ${errText}`);
-  }
-  const data = await resp.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-}
+import { json, optionsResponse } from "../_shared/response.ts";
+import { createAdminClient } from "../_shared/auth.ts";
+import { requireGeminiKey, callGemini } from "../_shared/gemini.ts";
+import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from "../_shared/language.ts";
+import { SYLLABUS } from "../_shared/syllabus.ts";
 
 // ── Main handler ─────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS });
-  }
+  if (req.method === "OPTIONS") return optionsResponse();
 
   try {
     // ── 1. Authenticate via CRON_SECRET ──────────────────────
@@ -197,17 +33,8 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) {
-      return json({ error: "GEMINI_API_KEY secret is not configured" }, 500);
-    }
-
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
-    );
-
+    const geminiApiKey = requireGeminiKey();
+    const admin = createAdminClient();
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
 
     // ── 2. Pick ONE topic for the day (shared across all languages) ──
@@ -266,22 +93,31 @@ CRITICAL JSON FORMAT RULES — FOLLOW EXACTLY OR THE SYSTEM WILL REJECT YOUR RES
 5. "options" MUST be an array of exactly 4 strings. "correct_index" MUST be an integer 0-3.
 6. ONLY the string VALUES should be written in ${langName}. The keys stay in English.
 
+ANSWER PLACEMENT RULES — CRITICAL:
+7. "correct_index" MUST be the 0-based index of the CORRECT answer inside the "options" array. \
+If the correct answer is the third option, correct_index MUST be 2. Double-check this for EVERY question.
+8. RANDOMIZE where you place the correct answer. Do NOT always put it first. \
+Vary the position across the 3 questions (e.g. one at index 1, one at index 3, one at index 0).
+9. "explanation" MUST explicitly state WHICH option is correct and WHY the others are wrong.
+
 {
   "title": "<concise article title in ${langName}>",
   "content": "<full article text in ${langName}>",
   "quiz_data": [
     {
       "question": "<question text in ${langName}>",
-      "options": ["<option A>", "<option B>", "<option C>", "<option D>"],
-      "correct_index": 0,
-      "explanation": "<explanation in ${langName}>"
+      "options": ["<wrong>", "<wrong>", "<correct answer>", "<wrong>"],
+      "correct_index": 2,
+      "explanation": "<explain why option C (index 2) is correct in ${langName}>"
     }
   ]
 }`;
 
       let rawContent: string;
       try {
-        rawContent = await callGemini(geminiApiKey, prompt);
+        rawContent = await callGemini(geminiApiKey, prompt, {
+          temperature: 0.4,
+        });
       } catch (err) {
         console.error(`Gemini error for lang=${lang}:`, err);
         results.push({ language: lang, skipped: true, reason: "Gemini error" });
@@ -324,15 +160,18 @@ CRITICAL JSON FORMAT RULES — FOLLOW EXACTLY OR THE SYSTEM WILL REJECT YOUR RES
       }
 
       // ── Validate each quiz item has the required English keys ──
-      const quizValid = parsed.quiz_data.every((q: Record<string, unknown>) =>
-        typeof q.question === "string" &&
-        Array.isArray(q.options) &&
-        q.options.length === 4 &&
-        typeof q.correct_index === "number" &&
-        q.correct_index >= 0 &&
-        q.correct_index <= 3 &&
-        typeof q.explanation === "string"
-      );
+      const quizValid = parsed.quiz_data.every((item) => {
+        const q = item as Record<string, unknown>;
+        return (
+          typeof q.question === "string" &&
+          Array.isArray(q.options) &&
+          (q.options as unknown[]).length === 4 &&
+          typeof q.correct_index === "number" &&
+          q.correct_index >= 0 &&
+          q.correct_index <= 3 &&
+          typeof q.explanation === "string"
+        );
+      });
 
       if (!quizValid) {
         console.error(

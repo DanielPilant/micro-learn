@@ -14,33 +14,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
-import { Colors, Spacing } from "../constants/theme";
+import {
+  Colors,
+  Spacing,
+  DifficultyColor,
+  CategoryColor,
+  CATEGORY_FALLBACK_COLOR,
+} from "../constants/theme";
+import { formatCategory } from "../utils/formatting";
 import type { Question } from "../types";
 import type { PracticeListScreenProps } from "../navigation/types";
-
-// ── Difficulty pill colours ───────────────────────────────────
-const DIFFICULTY_COLOR: Record<string, string> = {
-  easy: Colors.success,
-  medium: "#F59E0B",
-  hard: Colors.error,
-};
-
-// ── Category accent colours (one per domain) ─────────────────
-const CATEGORY_COLOR: Record<string, string> = {
-  system_design: "#818CF8", // indigo
-  algorithms: "#34D399", // green
-  dsa_theory: "#34D399",
-  databases: "#F59E0B", // amber
-  networking: "#38BDF8", // sky
-  operating_systems: "#FB923C", // orange
-  devops: "#A78BFA", // violet
-  fullstack_api: "#F472B6", // pink
-};
-const CATEGORY_FALLBACK = Colors.primary;
-
-function categoryColor(cat: string): string {
-  return CATEGORY_COLOR[cat] ?? CATEGORY_FALLBACK;
-}
 
 // ── Component ─────────────────────────────────────────────────
 export default function PracticeListScreen({
@@ -97,14 +80,14 @@ export default function PracticeListScreen({
 
     setGenerating(false);
     await loadQuestions();
-  }, [loadQuestions]);
+  }, [loadQuestions, t]);
 
   // ── List card ─────────────────────────────────────────────────
   const renderItem = useCallback(
     ({ item, index }: { item: Question; index: number }) => {
-      const catColor = categoryColor(item.category);
+      const catColor = CategoryColor[item.category] ?? CATEGORY_FALLBACK_COLOR;
       const diffColor =
-        DIFFICULTY_COLOR[item.difficulty] ?? Colors.textSecondary;
+        DifficultyColor[item.difficulty] ?? Colors.textSecondary;
 
       return (
         <TouchableOpacity
@@ -121,7 +104,7 @@ export default function PracticeListScreen({
             {/* header row */}
             <View style={styles.cardHeader}>
               <Text style={[styles.categoryLabel, { color: catColor }]}>
-                {item.category.replace(/_/g, " ").toUpperCase()}
+                {formatCategory(item.category).toUpperCase()}
               </Text>
               <View
                 style={[styles.diffPill, { backgroundColor: diffColor + "22" }]}

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  type DimensionValue,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "@react-navigation/native";
@@ -14,24 +15,9 @@ import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useReadiness } from "../hooks/useReadiness";
 import { Colors, Spacing } from "../constants/theme";
+import { scoreColor, formatCategory } from "../utils/formatting";
 import type { ReadinessScreenProps } from "../navigation/types";
 import type { CategoryReadiness } from "../hooks/useReadiness";
-
-// Colours for the score progress bar.
-function scoreColor(score: number): string {
-  if (score >= 80) return Colors.success;
-  if (score >= 60) return Colors.primary;
-  if (score >= 40) return "#F59E0B";
-  return Colors.error;
-}
-
-// "system_design" → "System Design"
-function formatCategory(cat: string): string {
-  return cat
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
 
 function CategoryCard({
   item,
@@ -53,7 +39,7 @@ function CategoryCard({
         <View
           style={[
             styles.barFill,
-            { width: `${item.avgScore}%` as any, backgroundColor: color },
+            { width: `${item.avgScore}%` as DimensionValue, backgroundColor: color },
           ]}
         />
       </View>
@@ -110,7 +96,7 @@ export default function ReadinessScreen(_: ReadinessScreenProps) {
             {/* ── Streak card ── */}
             <View style={styles.streakCard}>
               <View style={styles.streakLeft}>
-                <Ionicons name="flame" size={36} color="#F59E0B" />
+                <Ionicons name="flame" size={36} color={Colors.amber} />
                 <View style={styles.streakTextGroup}>
                   <Text style={styles.streakCount}>
                     {profile?.current_streak ?? 0}

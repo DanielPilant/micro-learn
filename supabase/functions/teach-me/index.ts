@@ -7,48 +7,23 @@
 //   3. Call Gemini 2.5 Flash with a "Socratic tutor" prompt
 //   4. Return { explanation } — stateless, nothing persisted
 
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-// ── CORS ─────────────────────────────────────────────────────
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
-}
-
-// ── Language config ───────────────────────────────────────────
-const LANGUAGE_NAMES: Record<string, string> = {
-  en: "English",
-  he: "Hebrew",
-};
+import { json, optionsResponse } from "../_shared/response.ts";
+import { createAdminClient, extractBearerToken } from "../_shared/auth.ts";
+import { requireGeminiKey, callGemini } from "../_shared/gemini.ts";
+import { LANGUAGE_NAMES } from "../_shared/language.ts";
 
 // ── Main handler ─────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS });
-  }
+  if (req.method === "OPTIONS") return optionsResponse();
 
   try {
     // ── 1. Verify JWT ────────────────────────────────────────
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
+    const jwt = extractBearerToken(req);
+    if (!jwt) {
       return json({ error: "Missing or malformed Authorization header" }, 401);
     }
-    const jwt = authHeader.slice(7);
 
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
-    );
-
+    const admin = createAdminClient();
     const {
       data: { user },
       error: authError,
@@ -74,10 +49,7 @@ Deno.serve(async (req: Request) => {
     const languageName = LANGUAGE_NAMES[language] ?? language.toUpperCase();
 
     // ── 3. Call Gemini 2.5 Flash ─────────────────────────────
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) {
-      return json({ error: "GEMINI_API_KEY secret is not configured" }, 500);
-    }
+    const geminiApiKey = requireGeminiKey();
 
     const prompt = `You are a Senior FAANG Interviewer and Educator. \
 A student is preparing for a technical interview and does not understand the \
@@ -99,32 +71,15 @@ technical identifier (e.g. a function name, a protocol name, an algorithm name).
 Return ONLY a JSON object with this exact shape (no markdown, no code fences):
 {"explanation": "<2-3 paragraphs in ${languageName}>"}`;
 
-    const geminiResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.4, // slightly higher than eval for more natural prose
-          },
-        }),
-      },
-    );
-
-    if (!geminiResp.ok) {
-      const errText = await geminiResp.text();
-      console.error("Gemini API error:", errText);
+    let rawContent: string;
+    try {
+      rawContent = await callGemini(geminiApiKey, prompt, { temperature: 0.4 });
+    } catch (err) {
+      console.error("Gemini API error:", err);
       return json({ error: "LLM service unavailable" }, 502);
     }
 
     // ── 4. Parse Gemini response ──────────────────────────────
-    const geminiData = await geminiResp.json();
-    const rawContent: string =
-      geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
     let result: { explanation: string };
     try {
       result = JSON.parse(rawContent);
